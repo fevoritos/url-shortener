@@ -1,6 +1,11 @@
 package link
 
+import "time"
+
 type Link struct {
-	Url  string `josn:"url"`
 	Hash string `json:"hash"`
+	Url  string `josn:"url"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
