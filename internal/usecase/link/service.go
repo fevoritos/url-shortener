@@ -2,7 +2,10 @@ package link
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	linkdomain "url-shortener/internal/domain"
 	"url-shortener/internal/lib/random"
@@ -25,7 +28,7 @@ func NewService(repo Repository) *Service {
 
 func (s *Service) Create(ctx context.Context, url string) (*linkdomain.Link, error) {
 	url = strings.TrimSpace(url)
-	if url == "" {
+	if url == "" || !isValidURL(url) {
 		return nil, ErrInvalidURL
 	}
 
@@ -41,7 +44,7 @@ func (s *Service) Create(ctx context.Context, url string) (*linkdomain.Link, err
 
 		created, err := s.repo.Create(ctx, link)
 		if err != nil {
-			if strings.Contains(err.Error(), "hash collision") {
+			if errors.Is(err, linkdomain.ErrConflict) {
 				lastErr = err
 				continue
 			}
@@ -63,4 +66,36 @@ func (s *Service) GetByHash(ctx context.Context, hash string) (*linkdomain.Link,
 
 	return s.repo.GetByHash(ctx, hash)
 
+}
+
+func isValidURL(rawURL string) bool {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return false
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+
+	host := u.Host
+	if host == "" {
+		return false
+	}
+
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+
+	dotIdx := strings.LastIndex(host, ".")
+
+	if dotIdx == -1 || dotIdx == 0 || dotIdx == len(host)-1 {
+		return false
+	}
+
+	if strings.Contains(host, " ") {
+		return false
+	}
+
+	return true
 }

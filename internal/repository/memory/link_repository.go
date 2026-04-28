@@ -2,8 +2,8 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"sync"
+	"time"
 
 	linkdomain "url-shortener/internal/domain"
 )
@@ -30,8 +30,12 @@ func (r *Repository) Create(ctx context.Context, link *linkdomain.Link) (*linkdo
 	}
 
 	if _, ok := r.hashToUrl[link.Hash]; ok {
-		return nil, errors.New("hash collision")
+		return nil, linkdomain.ErrConflict
 	}
+
+	now := time.Now()
+	link.CreatedAt = now
+	link.UpdatedAt = now
 
 	r.hashToUrl[link.Hash] = link
 	r.urlToHash[link.Url] = link
@@ -45,7 +49,7 @@ func (r *Repository) GetByHash(ctx context.Context, hash string) (*linkdomain.Li
 
 	link, ok := r.hashToUrl[hash]
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, linkdomain.ErrNotFound
 	}
 
 	return link, nil

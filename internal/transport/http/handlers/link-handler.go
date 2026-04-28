@@ -2,12 +2,19 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
+	linkdomain "url-shortener/internal/domain"
 	linkusecase "url-shortener/internal/usecase/link"
 )
 
 type LinkHandler struct {
 	usecase linkusecase.Usecase
+}
+
+type ErrorResponse struct {
+	Error string `json:"error"`
 }
 
 func NewLinkHandler(usecase linkusecase.Usecase) *LinkHandler {
@@ -17,23 +24,37 @@ func NewLinkHandler(usecase linkusecase.Usecase) *LinkHandler {
 func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req linkDTO
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		h.writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	created, err := h.usecase.Create(r.Context(), req.Url)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		if errors.Is(err, linkusecase.ErrInvalidURL) {
+			h.writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		slog.Error("failed to create link", "err", err)
+		h.writeError(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
 
-	writeJSON(w, http.StatusCreated, created)
+	h.writeJSON(w, http.StatusCreated, created)
 }
 
 func (h *LinkHandler) Goto(w http.ResponseWriter, r *http.Request) {
 	hash := r.PathValue("hash")
 	link, err := h.usecase.GetByHash(r.Context(), hash)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err)
+		if errors.Is(err, linkdomain.ErrNotFound) {
+			h.writeError(w, http.StatusNotFound, "link not found")
+			return
+		}
+
+		slog.Error("failed to get link", "hash", hash, "err", err)
+		h.writeError(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
 
 	http.Redirect(w, r, link.Url, http.StatusTemporaryRedirect)
@@ -50,13 +71,13 @@ func decodeJSON(r *http.Request, dst any) error {
 	return nil
 }
 
-func writeError(w http.ResponseWriter, status int, err error) {
-	writeJSON(w, status, map[string]string{
-		"error": err.Error(),
-	})
+func (h *LinkHandler) writeError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(ErrorResponse{Error: msg})
 }
 
-func writeJSON(w http.ResponseWriter, status int, payload any) {
+func (h *LinkHandler) writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 

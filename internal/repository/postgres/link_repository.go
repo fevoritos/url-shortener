@@ -41,7 +41,7 @@ func (r *Repository) Create(ctx context.Context, link *linkdomain.Link) (*linkdo
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" && pgErr.ConstraintName == "links_hash_key" {
-				return nil, fmt.Errorf("%s: hash collision: %w", op, err)
+				return nil, fmt.Errorf("%s: %w: %w", op, linkdomain.ErrConflict, err)
 			}
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -68,7 +68,7 @@ func (r *Repository) GetByHash(ctx context.Context, hash string) (*linkdomain.Li
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%s: link not found", op)
+			return nil, fmt.Errorf("%s: %w", op, linkdomain.ErrNotFound)
 		}
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
