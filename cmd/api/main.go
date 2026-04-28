@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,7 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	"url-shortener/config"
 	infrastructurepostgres "url-shortener/internal/infrastructure/postgres"
+	memoryrepo "url-shortener/internal/repository/memory"
 	postgresrepo "url-shortener/internal/repository/postgres"
 	transporthttp "url-shortener/internal/transport/http"
 	linkhandler "url-shortener/internal/transport/http/handlers"
@@ -22,19 +23,33 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	cfg := loadConfig()
+	cfg := config.LoadConfig()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := infrastructurepostgres.Open(ctx, cfg.DatabaseDSN)
-	if err != nil {
-		logger.Error("open postgres", "error", err)
+	var linkRepo link.Repository
+
+	switch cfg.StorageType {
+	case config.Postgres:
+		pool, err := infrastructurepostgres.Open(ctx, cfg.DatabaseDSN)
+		if err != nil {
+			logger.Error("open postgres", "error", err)
+			os.Exit(1)
+		}
+		defer pool.Close()
+		linkRepo = postgresrepo.New(pool)
+		logger.Info("using postgres storage")
+
+	case config.Memory:
+		linkRepo = memoryrepo.New()
+		logger.Info("using in-memory storage")
+
+	default:
+		logger.Error("unknown storage type", "type", cfg.StorageType)
 		os.Exit(1)
 	}
-	defer pool.Close()
 
-	linkRepo := postgresrepo.New(pool)
 	linkUsecase := link.NewService(linkRepo)
 	linkHandler := linkhandler.NewLinkHandler(linkUsecase)
 	router := transporthttp.NewRouter(linkHandler)
@@ -62,30 +77,4 @@ func main() {
 		logger.Error("listen and serve", "error", err)
 		os.Exit(1)
 	}
-}
-
-type config struct {
-	HTTPAddr    string
-	DatabaseDSN string
-}
-
-func loadConfig() config {
-	cfg := config{
-		HTTPAddr:    envOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseDSN: envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/shortener?sslmode=disable"),
-	}
-
-	if cfg.DatabaseDSN == "" {
-		panic(fmt.Errorf("DATABASE_DSN is required"))
-	}
-
-	return cfg
-}
-
-func envOrDefault(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-
-	return fallback
 }
