@@ -22,6 +22,17 @@ func NewLinkHandler(usecase linkusecase.Usecase) *LinkHandler {
 	return &LinkHandler{usecase: usecase}
 }
 
+// Create godoc
+// @Summary      Create a short link
+// @Description  Accepts a long URL and returns an object with a shortened hash
+// @Tags         links
+// @Accept       json
+// @Produce      json
+// @Param        input body      linkDTO  true  "link body"
+// @Success      201   {object}  linkdomain.Link
+// @Failure      400   {object}  ErrorResponse
+// @Failure      500   {object}  ErrorResponse
+// @Router       /links [post]
 func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req linkDTO
 	if err := decodeJSON(r, &req); err != nil {
@@ -44,6 +55,15 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusCreated, created)
 }
 
+// Goto godoc
+// @Summary      Redirect by link
+// @Description  Finds the original URL by hash and executes 307 Redirect.
+// @Tags         links
+// @Param        hash  path      string  true  "Hash of the short link"
+// @Success      307   {header}  string  "Location"  "URL for redirect"
+// @Failure      404   {object}  ErrorResponse
+// @Failure      500   {object}  ErrorResponse
+// @Router       /{hash} [get]
 func (h *LinkHandler) Goto(w http.ResponseWriter, r *http.Request) {
 	hash := r.PathValue("hash")
 	link, err := h.usecase.GetByHash(r.Context(), hash)

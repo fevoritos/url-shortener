@@ -17,16 +17,17 @@ import (
 	transporthttp "url-shortener/internal/transport/http"
 	linkhandler "url-shortener/internal/transport/http/handlers"
 	"url-shortener/internal/usecase/link"
+	linkusecase "url-shortener/internal/usecase/link"
 )
 
 func main() {
 	cfg := config.LoadConfig()
 	log := slogpretty.SetupPrettySlog()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
-	var linkRepo link.Repository
+	var linkRepo linkusecase.Repository
 
 	switch cfg.StorageType {
 	case config.Postgres:
@@ -52,10 +53,14 @@ func main() {
 	linkHandler := linkhandler.NewLinkHandler(linkUsecase)
 	router := transporthttp.NewRouter(linkHandler)
 
-	middlewareLogger := middleware.NewLogger(log)
+	stack := middleware.Chain(
+		middleware.CORS,
+		middleware.NewLogger(log),
+	)
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           middlewareLogger(router),
+		Handler:           stack(router),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

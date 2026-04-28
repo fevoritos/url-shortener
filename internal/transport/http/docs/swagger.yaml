@@ -1,0 +1,81 @@
+definitions:
+  handlers.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  handlers.linkDTO:
+    properties:
+      url:
+        type: string
+    type: object
+  link.Link:
+    properties:
+      created_at:
+        type: string
+      hash:
+        type: string
+      updated_at:
+        type: string
+      url:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /{hash}:
+    get:
+      description: Finds the original URL by hash and executes 307 Redirect.
+      parameters:
+      - description: Hash of the short link
+        in: path
+        name: hash
+        required: true
+        type: string
+      responses:
+        "307":
+          description: Location"  "URL for redirect
+          schema:
+            type: header
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Redirect by link
+      tags:
+      - links
+  /links:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a long URL and returns an object with a shortened hash
+      parameters:
+      - description: link body
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.linkDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/link.Link'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Create a short link
+      tags:
+      - links
+swagger: "2.0"
