@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,8 @@ import (
 
 	"url-shortener/config"
 	infrastructurepostgres "url-shortener/internal/infrastructure/postgres"
+	"url-shortener/internal/lib/logger/slogpretty"
+	"url-shortener/internal/middleware"
 	memoryrepo "url-shortener/internal/repository/memory"
 	postgresrepo "url-shortener/internal/repository/postgres"
 	transporthttp "url-shortener/internal/transport/http"
@@ -19,11 +20,8 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
 	cfg := config.LoadConfig()
+	log := slogpretty.SetupPrettySlog()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -34,19 +32,19 @@ func main() {
 	case config.Postgres:
 		pool, err := infrastructurepostgres.Open(ctx, cfg.DatabaseDSN)
 		if err != nil {
-			logger.Error("open postgres", "error", err)
+			log.Error("open postgres", "error", err)
 			os.Exit(1)
 		}
 		defer pool.Close()
 		linkRepo = postgresrepo.New(pool)
-		logger.Info("using postgres storage")
+		log.Info("using postgres storage")
 
 	case config.Memory:
 		linkRepo = memoryrepo.New()
-		logger.Info("using in-memory storage")
+		log.Info("using in-memory storage")
 
 	default:
-		logger.Error("unknown storage type", "type", cfg.StorageType)
+		log.Error("unknown storage type", "type", cfg.StorageType)
 		os.Exit(1)
 	}
 
@@ -54,9 +52,10 @@ func main() {
 	linkHandler := linkhandler.NewLinkHandler(linkUsecase)
 	router := transporthttp.NewRouter(linkHandler)
 
+	middlewareLogger := middleware.NewLogger(log)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           router,
+		Handler:           middlewareLogger(router),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -67,14 +66,14 @@ func main() {
 		defer cancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("shutdown http server", "error", err)
+			log.Error("shutdown http server", "error", err)
 		}
 	}()
 
-	logger.Info("http server started", "addr", cfg.HTTPAddr)
+	log.Info("http server started", "addr", cfg.HTTPAddr, "storage", cfg.StorageType)
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("listen and serve", "error", err)
+		log.Error("listen and serve", "error", err)
 		os.Exit(1)
 	}
 }

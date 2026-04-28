@@ -11,6 +11,7 @@ import (
 
 type LinkHandler struct {
 	usecase linkusecase.Usecase
+	log     *slog.Logger
 }
 
 type ErrorResponse struct {
@@ -35,7 +36,7 @@ func (h *LinkHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		slog.Error("failed to create link", "err", err)
+		h.log.Error("failed to create link", "err", err)
 		h.writeError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -52,7 +53,7 @@ func (h *LinkHandler) Goto(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		slog.Error("failed to get link", "hash", hash, "err", err)
+		h.log.Error("failed to get link", "hash", hash, "err", err)
 		h.writeError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
