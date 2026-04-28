@@ -18,8 +18,11 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func NewLinkHandler(usecase linkusecase.Usecase) *LinkHandler {
-	return &LinkHandler{usecase: usecase}
+func NewLinkHandler(usecase linkusecase.Usecase, log *slog.Logger) *LinkHandler {
+	return &LinkHandler{
+		usecase: usecase,
+		log:     log,
+	}
 }
 
 // Create godoc
@@ -70,6 +73,11 @@ func (h *LinkHandler) Goto(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, linkdomain.ErrNotFound) {
 			h.writeError(w, http.StatusNotFound, "link not found")
+			return
+		}
+
+		if errors.Is(err, linkusecase.ErrInvalidHash) {
+			h.writeError(w, http.StatusBadRequest, "invalid hash")
 			return
 		}
 

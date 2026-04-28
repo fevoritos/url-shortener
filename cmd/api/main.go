@@ -50,7 +50,7 @@ func main() {
 	}
 
 	linkUsecase := link.NewService(linkRepo)
-	linkHandler := linkhandler.NewLinkHandler(linkUsecase)
+	linkHandler := linkhandler.NewLinkHandler(linkUsecase, log)
 	router := transporthttp.NewRouter(linkHandler)
 
 	stack := middleware.Chain(
