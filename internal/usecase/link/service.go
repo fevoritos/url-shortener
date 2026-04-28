@@ -78,24 +78,24 @@ func isValidURL(rawURL string) bool {
 		return false
 	}
 
-	host := u.Host
+	host, port, err := net.SplitHostPort(u.Host)
+	hasPort := err == nil
+	if !hasPort {
+		host = u.Host
+	}
+
 	if host == "" {
 		return false
 	}
 
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
+	if hasPort && port != "" {
+		return true
 	}
 
 	dotIdx := strings.LastIndex(host, ".")
-
 	if dotIdx == -1 || dotIdx == 0 || dotIdx == len(host)-1 {
 		return false
 	}
 
-	if strings.Contains(host, " ") {
-		return false
-	}
-
-	return true
+	return !strings.Contains(host, " ")
 }
